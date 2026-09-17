@@ -318,61 +318,55 @@ class handler(BaseHTTPRequestHandler):
             b"Telegram bot is running."
         )
 
-    def do_POST(self):
+        def do_POST(self):
         try:
+            print("STAGE 1: WEBHOOK START")
+
             content_length = int(
-                self.headers.get(
-                    "Content-Length",
-                    0
-                )
+                self.headers.get("Content-Length", 0)
             )
 
-            body = self.rfile.read(
-                content_length
-            )
+            body = self.rfile.read(content_length)
+            update = json.loads(body.decode("utf-8"))
 
-            update = json.loads(
-                body.decode("utf-8")
-            )
+            print("STAGE 2: UPDATE RECEIVED")
 
-            # -------------------------------------------------
-            # USER SENT A TEXT MESSAGE
-            # -------------------------------------------------
-
+            # USER SENT TEXT
             message = update.get("message")
 
             if message:
+                print("STAGE 3: TEXT MESSAGE")
+
                 chat_id = message["chat"]["id"]
-                text = message.get(
-                    "text",
-                    ""
-                ).strip()
+                text = message.get("text", "").strip()
 
                 if text:
+                    print("STAGE 4: SENDING BUTTONS")
+
                     send_text_with_buttons(
                         chat_id,
                         text
                     )
 
-            # -------------------------------------------------
-            # USER PRESSED SARDOR / IFORA
-            # -------------------------------------------------
+                    print("STAGE 5: BUTTONS SENT")
 
-            callback_query = update.get(
-                "callback_query"
-            )
+            # USER PRESSED BUTTON
+            callback_query = update.get("callback_query")
 
             if callback_query:
+                print("STAGE 6: CALLBACK RECEIVED")
+
                 callback_id = callback_query["id"]
+
+                print("STAGE 7: ANSWERING CALLBACK")
 
                 telegram_answer_callback(
                     callback_id
                 )
 
-                callback_data = callback_query.get(
-                    "data"
-                )
+                print("STAGE 8: CALLBACK ANSWERED")
 
+                callback_data = callback_query.get("data")
                 callback_message = callback_query.get(
                     "message",
                     {}
@@ -392,21 +386,20 @@ class handler(BaseHTTPRequestHandler):
                     ""
                 )
 
+                print(
+                    "STAGE 9: CALLBACK DATA:",
+                    callback_data
+                )
+
                 if not chat_id or not message_text:
                     raise RuntimeError(
                         "Callback message data is missing."
                     )
 
-                # -------------------------------------------------
-                # EXTRACT ORIGINAL USER TEXT
-                # -------------------------------------------------
-
                 prefix = "Siz yubordingiz:\n\n"
 
                 if message_text.startswith(prefix):
-                    original_text = message_text[
-                        len(prefix):
-                    ]
+                    original_text = message_text[len(prefix):]
                 else:
                     original_text = message_text
 
@@ -415,18 +408,12 @@ class handler(BaseHTTPRequestHandler):
                         "Original text is empty."
                     )
 
-                # -------------------------------------------------
-                # SELECT VOICE
-                # -------------------------------------------------
-
                 if callback_data == "sardor":
-
                     voice = SARDOR_VOICE
                     character_prompt = SARDOR_PROMPT
                     filename = "sardor.wav"
 
                 elif callback_data == "ifora":
-
                     voice = IFORA_VOICE
                     character_prompt = IFORA_PROMPT
                     filename = "ifora.wav"
@@ -436,25 +423,29 @@ class handler(BaseHTTPRequestHandler):
                         "Unknown voice selection."
                     )
 
-                # -------------------------------------------------
-                # REMOVE BUTTONS
-                # -------------------------------------------------
+                print(
+                    "STAGE 10: VOICE SELECTED:",
+                    voice
+                )
 
                 if message_id:
                     try:
+                        print("STAGE 11: REMOVING BUTTONS")
+
                         telegram_remove_buttons(
                             chat_id,
                             message_id
                         )
+
+                        print("STAGE 12: BUTTONS REMOVED")
+
                     except Exception as error:
                         print(
                             "BUTTON REMOVE ERROR:",
                             repr(error)
                         )
 
-                # -------------------------------------------------
-                # GENERATE VOICE
-                # -------------------------------------------------
+                print("STAGE 13: GEMINI START")
 
                 audio = generate_tts(
                     original_text,
@@ -462,9 +453,12 @@ class handler(BaseHTTPRequestHandler):
                     character_prompt
                 )
 
-                # -------------------------------------------------
-                # SEND AUDIO
-                # -------------------------------------------------
+                print(
+                    "STAGE 14: GEMINI AUDIO READY, BYTES:",
+                    len(audio)
+                )
+
+                print("STAGE 15: SENDING AUDIO")
 
                 send_audio(
                     chat_id,
@@ -472,33 +466,33 @@ class handler(BaseHTTPRequestHandler):
                     filename
                 )
 
-            self.send_response(200)
+                print("STAGE 16: AUDIO SENT")
 
+            self.send_response(200)
             self.send_header(
                 "Content-Type",
                 "application/json"
             )
-
             self.end_headers()
 
             self.wfile.write(
                 b'{"ok":true}'
             )
 
+            print("STAGE 17: WEBHOOK COMPLETE")
+
         except Exception as error:
 
             print(
-                "ERROR:",
+                "FINAL ERROR:",
                 repr(error)
             )
 
             self.send_response(500)
-
             self.send_header(
                 "Content-Type",
                 "application/json"
             )
-
             self.end_headers()
 
             self.wfile.write(
