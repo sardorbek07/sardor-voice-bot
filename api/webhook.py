@@ -14,7 +14,6 @@ GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 
 GEMINI_MODEL = "gemini-3.1-flash-tts-preview"
 
-
 SARDOR_VOICE = "Achird"
 IFORA_VOICE = "Aoede"
 
@@ -68,12 +67,26 @@ def telegram_api(method, data):
     request = urllib.request.Request(
         url,
         data=json.dumps(data).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json"
+        },
         method="POST",
     )
 
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    except urllib.error.HTTPError as error:
+        error_body = error.read().decode("utf-8", errors="replace")
+
+        print("TELEGRAM HTTP ERROR:", error.code)
+        print("TELEGRAM METHOD:", method)
+        print("TELEGRAM RESPONSE:", error_body)
+
+        raise RuntimeError(
+            f"Telegram HTTP {error.code}: {error_body}"
+        )
 
 
 def telegram_answer_callback(callback_id):
@@ -146,26 +159,42 @@ TEXT TO READ:
         method="POST",
     )
 
-try:
-    with urllib.request.urlopen(request, timeout=60) as response:
-        result = json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            result = json.loads(
+                response.read().decode("utf-8")
+            )
 
-except urllib.error.HTTPError as error:
-    error_body = error.read().decode("utf-8", errors="replace")
-    print("GEMINI HTTP ERROR:", error.code)
-    print("GEMINI RESPONSE:", error_body)
-    raise RuntimeError(
-        f"Gemini HTTP {error.code}: {error_body}"
-    )
+    except urllib.error.HTTPError as error:
+        error_body = error.read().decode(
+            "utf-8",
+            errors="replace"
+        )
 
-    audio_data = result.get("output_audio", {}).get("data")
+        print("GEMINI HTTP ERROR:", error.code)
+        print("GEMINI RESPONSE:", error_body)
+
+        raise RuntimeError(
+            f"Gemini HTTP {error.code}: {error_body}"
+        )
+
+    audio_data = result.get(
+        "output_audio",
+        {}
+    ).get("data")
 
     if not audio_data:
         raise RuntimeError(
-            f"Gemini did not return audio: {json.dumps(result)[:1000]}"
+            "Gemini did not return audio: "
+            + json.dumps(result)[:2000]
         )
 
-    pcm_data = base64.b64decode(audio_data)
+    try:
+        pcm_data = base64.b64decode(audio_data)
+    except Exception as error:
+        raise RuntimeError(
+            f"Failed to decode Gemini audio: {error}"
+        )
 
     return pcm_to_wav(pcm_data)
 
@@ -176,38 +205,79 @@ def send_audio(chat_id, audio_bytes, filename="voice.wav"):
     body = bytearray()
 
     def add_field(name, value):
-        body.extend(f"--{boundary}\r\n".encode())
+        body.extend(
+            f"--{boundary}\r\n".encode()
+        )
+
         body.extend(
             f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode()
         )
-        body.extend(str(value).encode())
+
+        body.extend(
+            str(value).encode()
+        )
+
         body.extend(b"\r\n")
 
     add_field("chat_id", chat_id)
 
-    body.extend(f"--{boundary}\r\n".encode())
+    body.extend(
+        f"--{boundary}\r\n".encode()
+    )
+
     body.extend(
         f'Content-Disposition: form-data; name="audio"; filename="{filename}"\r\n'.encode()
     )
-    body.extend(b"Content-Type: audio/wav\r\n\r\n")
+
+    body.extend(
+        b"Content-Type: audio/wav\r\n\r\n"
+    )
+
     body.extend(audio_bytes)
+
     body.extend(b"\r\n")
 
-    body.extend(f"--{boundary}--\r\n".encode())
+    body.extend(
+        f"--{boundary}--\r\n".encode()
+    )
 
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendAudio"
+    url = (
+        f"https://api.telegram.org/"
+        f"bot{TELEGRAM_BOT_TOKEN}/sendAudio"
+    )
 
     request = urllib.request.Request(
         url,
         data=bytes(body),
         headers={
-            "Content-Type": f"multipart/form-data; boundary={boundary}"
+            "Content-Type": (
+                f"multipart/form-data; boundary={boundary}"
+            )
         },
         method="POST",
     )
 
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(
+            request,
+            timeout=30
+        ) as response:
+            return json.loads(
+                response.read().decode("utf-8")
+            )
+
+    except urllib.error.HTTPError as error:
+        error_body = error.read().decode(
+            "utf-8",
+            errors="replace"
+        )
+
+        print("TELEGRAM AUDIO HTTP ERROR:", error.code)
+        print("TELEGRAM AUDIO RESPONSE:", error_body)
+
+        raise RuntimeError(
+            f"Telegram sendAudio HTTP {error.code}: {error_body}"
+        )
 
 
 def send_text_with_buttons(chat_id, text):
@@ -238,18 +308,32 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         self.send_response(200)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header(
+            "Content-Type",
+            "text/plain; charset=utf-8"
+        )
         self.end_headers()
-        self.wfile.write(b"Telegram bot is running.")
+
+        self.wfile.write(
+            b"Telegram bot is running."
+        )
 
     def do_POST(self):
         try:
             content_length = int(
-                self.headers.get("Content-Length", 0)
+                self.headers.get(
+                    "Content-Length",
+                    0
+                )
             )
 
-            body = self.rfile.read(content_length)
-            update = json.loads(body.decode("utf-8"))
+            body = self.rfile.read(
+                content_length
+            )
+
+            update = json.loads(
+                body.decode("utf-8")
+            )
 
             # -------------------------------------------------
             # USER SENT A TEXT MESSAGE
@@ -259,76 +343,128 @@ class handler(BaseHTTPRequestHandler):
 
             if message:
                 chat_id = message["chat"]["id"]
-                text = message.get("text", "").strip()
+                text = message.get(
+                    "text",
+                    ""
+                ).strip()
 
                 if text:
-                    send_text_with_buttons(chat_id, text)
+                    send_text_with_buttons(
+                        chat_id,
+                        text
+                    )
 
             # -------------------------------------------------
             # USER PRESSED SARDOR / IFORA
             # -------------------------------------------------
 
-            callback_query = update.get("callback_query")
+            callback_query = update.get(
+                "callback_query"
+            )
 
             if callback_query:
                 callback_id = callback_query["id"]
 
-                telegram_answer_callback(callback_id)
+                telegram_answer_callback(
+                    callback_id
+                )
 
-                callback_data = callback_query.get("data")
-                callback_message = callback_query.get("message", {})
+                callback_data = callback_query.get(
+                    "data"
+                )
 
-                chat_id = callback_message.get("chat", {}).get("id")
-                message_id = callback_message.get("message_id")
-                message_text = callback_message.get("text", "")
+                callback_message = callback_query.get(
+                    "message",
+                    {}
+                )
+
+                chat_id = callback_message.get(
+                    "chat",
+                    {}
+                ).get("id")
+
+                message_id = callback_message.get(
+                    "message_id"
+                )
+
+                message_text = callback_message.get(
+                    "text",
+                    ""
+                )
 
                 if not chat_id or not message_text:
-                    raise RuntimeError("Callback message data is missing.")
+                    raise RuntimeError(
+                        "Callback message data is missing."
+                    )
 
-                # Our bot message format:
-                #
-                # Siz yubordingiz:
-                #
-                # original text
+                # -------------------------------------------------
+                # EXTRACT ORIGINAL USER TEXT
+                # -------------------------------------------------
 
                 prefix = "Siz yubordingiz:\n\n"
 
                 if message_text.startswith(prefix):
-                    original_text = message_text[len(prefix):]
+                    original_text = message_text[
+                        len(prefix):
+                    ]
                 else:
                     original_text = message_text
 
                 if not original_text.strip():
-                    raise RuntimeError("Original text is empty.")
+                    raise RuntimeError(
+                        "Original text is empty."
+                    )
+
+                # -------------------------------------------------
+                # SELECT VOICE
+                # -------------------------------------------------
 
                 if callback_data == "sardor":
+
                     voice = SARDOR_VOICE
                     character_prompt = SARDOR_PROMPT
                     filename = "sardor.wav"
 
                 elif callback_data == "ifora":
+
                     voice = IFORA_VOICE
                     character_prompt = IFORA_PROMPT
                     filename = "ifora.wav"
 
                 else:
-                    raise RuntimeError("Unknown voice selection.")
+                    raise RuntimeError(
+                        "Unknown voice selection."
+                    )
 
-                # Remove buttons after selection.
+                # -------------------------------------------------
+                # REMOVE BUTTONS
+                # -------------------------------------------------
+
                 if message_id:
                     try:
                         telegram_remove_buttons(
                             chat_id,
                             message_id
                         )
-                    except Exception:
-                        pass
+                    except Exception as error:
+                        print(
+                            "BUTTON REMOVE ERROR:",
+                            repr(error)
+                        )
+
+                # -------------------------------------------------
+                # GENERATE VOICE
+                # -------------------------------------------------
 
                 audio = generate_tts(
                     original_text,
                     voice,
                     character_prompt
                 )
+
+                # -------------------------------------------------
+                # SEND AUDIO
+                # -------------------------------------------------
 
                 send_audio(
                     chat_id,
@@ -337,10 +473,12 @@ class handler(BaseHTTPRequestHandler):
                 )
 
             self.send_response(200)
+
             self.send_header(
                 "Content-Type",
                 "application/json"
             )
+
             self.end_headers()
 
             self.wfile.write(
@@ -348,13 +486,19 @@ class handler(BaseHTTPRequestHandler):
             )
 
         except Exception as error:
-            print("ERROR:", repr(error))
+
+            print(
+                "ERROR:",
+                repr(error)
+            )
 
             self.send_response(500)
+
             self.send_header(
                 "Content-Type",
                 "application/json"
             )
+
             self.end_headers()
 
             self.wfile.write(
