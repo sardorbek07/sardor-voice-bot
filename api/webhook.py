@@ -5,6 +5,7 @@ import wave
 import io
 import urllib.request
 import urllib.parse
+import urllib.error
 from http.server import BaseHTTPRequestHandler
 
 
@@ -145,8 +146,17 @@ TEXT TO READ:
         method="POST",
     )
 
+try:
     with urllib.request.urlopen(request, timeout=60) as response:
         result = json.loads(response.read().decode("utf-8"))
+
+except urllib.error.HTTPError as error:
+    error_body = error.read().decode("utf-8", errors="replace")
+    print("GEMINI HTTP ERROR:", error.code)
+    print("GEMINI RESPONSE:", error_body)
+    raise RuntimeError(
+        f"Gemini HTTP {error.code}: {error_body}"
+    )
 
     audio_data = result.get("output_audio", {}).get("data")
 
