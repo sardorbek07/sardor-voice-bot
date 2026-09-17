@@ -74,11 +74,19 @@ def telegram_api(method, data):
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return json.loads(response.read().decode("utf-8"))
+        with urllib.request.urlopen(
+            request,
+            timeout=30
+        ) as response:
+            return json.loads(
+                response.read().decode("utf-8")
+            )
 
     except urllib.error.HTTPError as error:
-        error_body = error.read().decode("utf-8", errors="replace")
+        error_body = error.read().decode(
+            "utf-8",
+            errors="replace"
+        )
 
         print("TELEGRAM HTTP ERROR:", error.code)
         print("TELEGRAM METHOD:", method)
@@ -160,7 +168,10 @@ TEXT TO READ:
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
+        with urllib.request.urlopen(
+            request,
+            timeout=60
+        ) as response:
             result = json.loads(
                 response.read().decode("utf-8")
             )
@@ -190,7 +201,10 @@ TEXT TO READ:
         )
 
     try:
-        pcm_data = base64.b64decode(audio_data)
+        pcm_data = base64.b64decode(
+            audio_data
+        )
+
     except Exception as error:
         raise RuntimeError(
             f"Failed to decode Gemini audio: {error}"
@@ -199,7 +213,11 @@ TEXT TO READ:
     return pcm_to_wav(pcm_data)
 
 
-def send_audio(chat_id, audio_bytes, filename="voice.wav"):
+def send_audio(
+    chat_id,
+    audio_bytes,
+    filename="voice.wav"
+):
     boundary = "----TelegramBoundary7MA4YWxkTrZu0gW"
 
     body = bytearray()
@@ -217,9 +235,14 @@ def send_audio(chat_id, audio_bytes, filename="voice.wav"):
             str(value).encode()
         )
 
-        body.extend(b"\r\n")
+        body.extend(
+            b"\r\n"
+        )
 
-    add_field("chat_id", chat_id)
+    add_field(
+        "chat_id",
+        chat_id
+    )
 
     body.extend(
         f"--{boundary}\r\n".encode()
@@ -233,9 +256,13 @@ def send_audio(chat_id, audio_bytes, filename="voice.wav"):
         b"Content-Type: audio/wav\r\n\r\n"
     )
 
-    body.extend(audio_bytes)
+    body.extend(
+        audio_bytes
+    )
 
-    body.extend(b"\r\n")
+    body.extend(
+        b"\r\n"
+    )
 
     body.extend(
         f"--{boundary}--\r\n".encode()
@@ -250,9 +277,8 @@ def send_audio(chat_id, audio_bytes, filename="voice.wav"):
         url,
         data=bytes(body),
         headers={
-            "Content-Type": (
+            "Content-Type":
                 f"multipart/form-data; boundary={boundary}"
-            )
         },
         method="POST",
     )
@@ -272,8 +298,15 @@ def send_audio(chat_id, audio_bytes, filename="voice.wav"):
             errors="replace"
         )
 
-        print("TELEGRAM AUDIO HTTP ERROR:", error.code)
-        print("TELEGRAM AUDIO RESPONSE:", error_body)
+        print(
+            "TELEGRAM AUDIO HTTP ERROR:",
+            error.code
+        )
+
+        print(
+            "TELEGRAM AUDIO RESPONSE:",
+            error_body
+        )
 
         raise RuntimeError(
             f"Telegram sendAudio HTTP {error.code}: {error_body}"
@@ -308,65 +341,100 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         self.send_response(200)
+
         self.send_header(
             "Content-Type",
             "text/plain; charset=utf-8"
         )
+
         self.end_headers()
 
         self.wfile.write(
             b"Telegram bot is running."
         )
 
-        def do_POST(self):
+    def do_POST(self):
         try:
-            print("STAGE 1: WEBHOOK START")
-
-            content_length = int(
-                self.headers.get("Content-Length", 0)
+            print(
+                "STAGE 1: WEBHOOK START"
             )
 
-            body = self.rfile.read(content_length)
-            update = json.loads(body.decode("utf-8"))
+            content_length = int(
+                self.headers.get(
+                    "Content-Length",
+                    0
+                )
+            )
 
-            print("STAGE 2: UPDATE RECEIVED")
+            body = self.rfile.read(
+                content_length
+            )
 
-            # USER SENT TEXT
-            message = update.get("message")
+            update = json.loads(
+                body.decode("utf-8")
+            )
+
+            print(
+                "STAGE 2: UPDATE RECEIVED"
+            )
+
+            message = update.get(
+                "message"
+            )
 
             if message:
-                print("STAGE 3: TEXT MESSAGE")
+                print(
+                    "STAGE 3: TEXT MESSAGE"
+                )
 
                 chat_id = message["chat"]["id"]
-                text = message.get("text", "").strip()
+
+                text = message.get(
+                    "text",
+                    ""
+                ).strip()
 
                 if text:
-                    print("STAGE 4: SENDING BUTTONS")
+                    print(
+                        "STAGE 4: SENDING BUTTONS"
+                    )
 
                     send_text_with_buttons(
                         chat_id,
                         text
                     )
 
-                    print("STAGE 5: BUTTONS SENT")
+                    print(
+                        "STAGE 5: BUTTONS SENT"
+                    )
 
-            # USER PRESSED BUTTON
-            callback_query = update.get("callback_query")
+            callback_query = update.get(
+                "callback_query"
+            )
 
             if callback_query:
-                print("STAGE 6: CALLBACK RECEIVED")
+                print(
+                    "STAGE 6: CALLBACK RECEIVED"
+                )
 
                 callback_id = callback_query["id"]
 
-                print("STAGE 7: ANSWERING CALLBACK")
+                print(
+                    "STAGE 7: ANSWERING CALLBACK"
+                )
 
                 telegram_answer_callback(
                     callback_id
                 )
 
-                print("STAGE 8: CALLBACK ANSWERED")
+                print(
+                    "STAGE 8: CALLBACK ANSWERED"
+                )
 
-                callback_data = callback_query.get("data")
+                callback_data = callback_query.get(
+                    "data"
+                )
+
                 callback_message = callback_query.get(
                     "message",
                     {}
@@ -396,10 +464,16 @@ class handler(BaseHTTPRequestHandler):
                         "Callback message data is missing."
                     )
 
-                prefix = "Siz yubordingiz:\n\n"
+                prefix = (
+                    "Siz yubordingiz:\n\n"
+                )
 
-                if message_text.startswith(prefix):
-                    original_text = message_text[len(prefix):]
+                if message_text.startswith(
+                    prefix
+                ):
+                    original_text = message_text[
+                        len(prefix):
+                    ]
                 else:
                     original_text = message_text
 
@@ -409,11 +483,13 @@ class handler(BaseHTTPRequestHandler):
                     )
 
                 if callback_data == "sardor":
+
                     voice = SARDOR_VOICE
                     character_prompt = SARDOR_PROMPT
                     filename = "sardor.wav"
 
                 elif callback_data == "ifora":
+
                     voice = IFORA_VOICE
                     character_prompt = IFORA_PROMPT
                     filename = "ifora.wav"
@@ -430,14 +506,18 @@ class handler(BaseHTTPRequestHandler):
 
                 if message_id:
                     try:
-                        print("STAGE 11: REMOVING BUTTONS")
+                        print(
+                            "STAGE 11: REMOVING BUTTONS"
+                        )
 
                         telegram_remove_buttons(
                             chat_id,
                             message_id
                         )
 
-                        print("STAGE 12: BUTTONS REMOVED")
+                        print(
+                            "STAGE 12: BUTTONS REMOVED"
+                        )
 
                     except Exception as error:
                         print(
@@ -445,7 +525,9 @@ class handler(BaseHTTPRequestHandler):
                             repr(error)
                         )
 
-                print("STAGE 13: GEMINI START")
+                print(
+                    "STAGE 13: GEMINI START"
+                )
 
                 audio = generate_tts(
                     original_text,
@@ -458,7 +540,9 @@ class handler(BaseHTTPRequestHandler):
                     len(audio)
                 )
 
-                print("STAGE 15: SENDING AUDIO")
+                print(
+                    "STAGE 15: SENDING AUDIO"
+                )
 
                 send_audio(
                     chat_id,
@@ -466,20 +550,26 @@ class handler(BaseHTTPRequestHandler):
                     filename
                 )
 
-                print("STAGE 16: AUDIO SENT")
+                print(
+                    "STAGE 16: AUDIO SENT"
+                )
 
             self.send_response(200)
+
             self.send_header(
                 "Content-Type",
                 "application/json"
             )
+
             self.end_headers()
 
             self.wfile.write(
                 b'{"ok":true}'
             )
 
-            print("STAGE 17: WEBHOOK COMPLETE")
+            print(
+                "STAGE 17: WEBHOOK COMPLETE"
+            )
 
         except Exception as error:
 
@@ -489,10 +579,12 @@ class handler(BaseHTTPRequestHandler):
             )
 
             self.send_response(500)
+
             self.send_header(
                 "Content-Type",
                 "application/json"
             )
+
             self.end_headers()
 
             self.wfile.write(
