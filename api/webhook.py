@@ -9,14 +9,27 @@ import urllib.error
 from http.server import BaseHTTPRequestHandler
 
 
+# =========================
+# ENVIRONMENT VARIABLES
+# =========================
+
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+
+
+# =========================
+# GEMINI CONFIG
+# =========================
 
 GEMINI_MODEL = "gemini-3.1-flash-tts-preview"
 
 SARDOR_VOICE = "Achird"
 IFORA_VOICE = "Aoede"
 
+
+# =========================
+# CHARACTER PROMPTS
+# =========================
 
 SARDOR_PROMPT = """
 You are a 21-year-old Uzbek male.
@@ -61,6 +74,10 @@ Do not add, remove, translate, or explain anything.
 """
 
 
+# =========================
+# TELEGRAM API
+# =========================
+
 def telegram_api(method, data):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/{method}"
 
@@ -97,6 +114,10 @@ def telegram_api(method, data):
         )
 
 
+# =========================
+# CALLBACK ANSWER
+# =========================
+
 def telegram_answer_callback(callback_id):
     telegram_api(
         "answerCallbackQuery",
@@ -105,6 +126,10 @@ def telegram_answer_callback(callback_id):
         }
     )
 
+
+# =========================
+# REMOVE BUTTONS
+# =========================
 
 def telegram_remove_buttons(chat_id, message_id):
     telegram_api(
@@ -119,6 +144,10 @@ def telegram_remove_buttons(chat_id, message_id):
     )
 
 
+# =========================
+# PCM -> WAV
+# =========================
+
 def pcm_to_wav(pcm_data):
     output = io.BytesIO()
 
@@ -131,7 +160,12 @@ def pcm_to_wav(pcm_data):
     return output.getvalue()
 
 
+# =========================
+# GEMINI TTS
+# =========================
+
 def generate_tts(text, voice, character_prompt):
+
     full_prompt = f"""
 {character_prompt}
 
@@ -213,16 +247,22 @@ TEXT TO READ:
     return pcm_to_wav(pcm_data)
 
 
+# =========================
+# SEND AUDIO TO TELEGRAM
+# =========================
+
 def send_audio(
     chat_id,
     audio_bytes,
     filename="voice.wav"
 ):
+
     boundary = "----TelegramBoundary7MA4YWxkTrZu0gW"
 
     body = bytearray()
 
     def add_field(name, value):
+
         body.extend(
             f"--{boundary}\r\n".encode()
         )
@@ -313,7 +353,12 @@ def send_audio(
         )
 
 
+# =========================
+# SEND MESSAGE + BUTTONS
+# =========================
+
 def send_text_with_buttons(chat_id, text):
+
     telegram_api(
         "sendMessage",
         {
@@ -337,9 +382,18 @@ def send_text_with_buttons(chat_id, text):
     )
 
 
+# =========================
+# WEBHOOK HANDLER
+# =========================
+
 class handler(BaseHTTPRequestHandler):
 
+    # =====================
+    # GET
+    # =====================
+
     def do_GET(self):
+
         self.send_response(200)
 
         self.send_header(
@@ -353,8 +407,14 @@ class handler(BaseHTTPRequestHandler):
             b"Telegram bot is running."
         )
 
+    # =====================
+    # POST
+    # =====================
+
     def do_POST(self):
+
         try:
+
             print(
                 "STAGE 1: WEBHOOK START"
             )
@@ -378,11 +438,16 @@ class handler(BaseHTTPRequestHandler):
                 "STAGE 2: UPDATE RECEIVED"
             )
 
+            # =================
+            # NORMAL MESSAGE
+            # =================
+
             message = update.get(
                 "message"
             )
 
             if message:
+
                 print(
                     "STAGE 3: TEXT MESSAGE"
                 )
@@ -395,6 +460,7 @@ class handler(BaseHTTPRequestHandler):
                 ).strip()
 
                 if text:
+
                     print(
                         "STAGE 4: SENDING BUTTONS"
                     )
@@ -408,11 +474,16 @@ class handler(BaseHTTPRequestHandler):
                         "STAGE 5: BUTTONS SENT"
                     )
 
+            # =================
+            # CALLBACK
+            # =================
+
             callback_query = update.get(
                 "callback_query"
             )
 
             if callback_query:
+
                 print(
                     "STAGE 6: CALLBACK RECEIVED"
                 )
@@ -423,13 +494,24 @@ class handler(BaseHTTPRequestHandler):
                     "STAGE 7: ANSWERING CALLBACK"
                 )
 
-                telegram_answer_callback(
-                    callback_id
-                )
+                # Telegram callback expired bo'lsa ham
+                # asosiy jarayon to'xtamasin.
+                try:
 
-                print(
-                    "STAGE 8: CALLBACK ANSWERED"
-                )
+                    telegram_answer_callback(
+                        callback_id
+                    )
+
+                    print(
+                        "STAGE 8: CALLBACK ANSWERED"
+                    )
+
+                except Exception as error:
+
+                    print(
+                        "CALLBACK ANSWER ERROR:",
+                        repr(error)
+                    )
 
                 callback_data = callback_query.get(
                     "data"
@@ -460,6 +542,7 @@ class handler(BaseHTTPRequestHandler):
                 )
 
                 if not chat_id or not message_text:
+
                     raise RuntimeError(
                         "Callback message data is missing."
                     )
@@ -471,16 +554,24 @@ class handler(BaseHTTPRequestHandler):
                 if message_text.startswith(
                     prefix
                 ):
+
                     original_text = message_text[
                         len(prefix):
                     ]
+
                 else:
+
                     original_text = message_text
 
                 if not original_text.strip():
+
                     raise RuntimeError(
                         "Original text is empty."
                     )
+
+                # =================
+                # VOICE SELECTION
+                # =================
 
                 if callback_data == "sardor":
 
@@ -495,6 +586,7 @@ class handler(BaseHTTPRequestHandler):
                     filename = "ifora.wav"
 
                 else:
+
                     raise RuntimeError(
                         "Unknown voice selection."
                     )
@@ -504,8 +596,14 @@ class handler(BaseHTTPRequestHandler):
                     voice
                 )
 
+                # =================
+                # REMOVE BUTTONS
+                # =================
+
                 if message_id:
+
                     try:
+
                         print(
                             "STAGE 11: REMOVING BUTTONS"
                         )
@@ -520,10 +618,15 @@ class handler(BaseHTTPRequestHandler):
                         )
 
                     except Exception as error:
+
                         print(
                             "BUTTON REMOVE ERROR:",
                             repr(error)
                         )
+
+                # =================
+                # GEMINI
+                # =================
 
                 print(
                     "STAGE 13: GEMINI START"
@@ -540,6 +643,10 @@ class handler(BaseHTTPRequestHandler):
                     len(audio)
                 )
 
+                # =================
+                # SEND AUDIO
+                # =================
+
                 print(
                     "STAGE 15: SENDING AUDIO"
                 )
@@ -553,6 +660,10 @@ class handler(BaseHTTPRequestHandler):
                 print(
                     "STAGE 16: AUDIO SENT"
                 )
+
+            # =================
+            # SUCCESS RESPONSE
+            # =================
 
             self.send_response(200)
 
